@@ -1,0 +1,51 @@
+  Create a complete, production-ready, and premium Book Reader application for Aristotle's "Organon". This should not be a basic prototype; it should feel like a polished, modern publishing app (like Apple Books or Readwise) that handles the complexities of a dense philosophical text.
+
+**Tech Stack:**
+- Frontend: React, TypeScript (TSX), TailwindCSS v4, Zustand (for state management).
+- Backend: Tauri (Rust).
+- Icons: Lucide-React.
+- Database (if any): Local SQLite (via Tauri plugin) for persistence.
+- Data: A JSON file located in `data/organon_english.json` containing the book structure.
+
+**Architecture & Tauri Setup:**
+- `lib.rs` must be strictly for Tauri setup (importing plugins, registering commands).
+- Split other Rust functionalities into separate files: `commands.rs` (for reading the JSON and search functions), `db.rs` (for local SQLite persistence of notes, highlights, and reading progress).
+- The frontend must read the JSON data via a Tauri command to ensure secure file system access.
+
+**UI/UX Design (Distraction-Free & Premium):**
+- **Theme:** Carefully chosen colors for Light and Dark themes. Use warm off-white/sepia tones for light mode (e.g., `#F4F1EA` background) and deep slate/charcoal for dark mode (e.g., `#1A1B1E`). Avoid harsh pure blacks and whites.
+- **Layout:**
+  - Left: Collapsible Table of Contents (TOC).
+  - Center: The reading pane (max-width around 65ch for optimal readability).
+  - Right: Collapsible Notes & Highlights sidebar.
+- **Typography Controls:** Users can adjust font size, line height, font family (Serif vs Sans-serif), and margin width via a popover.
+
+**Core Features (Must-Haves):**
+1. **Reading & Persistence:**
+   - Continuous scroll. Remember user's last read location (using paragraph IDs, not just raw scroll pixels) and restore on open.
+   - A subtle reading progress bar at the top.
+2. **Navigation:** Active chapter highlighted in the TOC based on scroll position (Intersection Observer).
+3. **Notes & Highlights:**
+   - Text selection triggers a floating popover: "Highlight", "Add Note", "Define".
+   - Allow multi-color highlights (Yellow, Blue, Red, Green).
+   - **Anchoring Logic:** Ensure the highlight anchors strictly to a paragraph ID and character offset, so it does not break if the user changes font size.
+   - Right sidebar shows a unified feed of all notes and highlights with jump-to-context links.
+4. **Favouriting:** Allow users to favorite specific paragraphs or notes.
+5. **Search:**
+   - Local full-text search (using Fuse.js) with context snippets and highlighting.
+   - *Semantic Search:* Use a lightweight embedding model via `@xenova/transformers` in the frontend to generate embeddings for a query, and compare against pre-computed JSON paragraph embeddings for semantic retrieval.
+
+**Creative & Premium Features (Go Beyond Basic):**
+1. **Zen Mode (Focus Mode):** A toggle that hides the TOC, Notes sidebar, and top bar, dimming all text except the currently active paragraph or the user's current selection.
+2. **Inline Dictionary / Wiki Lookup:** When the user highlights a word and clicks "Define", use a public API (like Free Dictionary API or Wikipedia) to fetch a definition in a floating card without leaving the page.
+3. **"Contextual Highlights":** Add a "My Mind" tab in the Notes panel that automatically groups notes/highlights by the TOC chapter, providing a summary dashboard of the user's thoughts on each part.
+4. **Keyboard-First Navigation:** Add keyboard shortcuts (e.g., `Cmd/Ctrl + F` for search, `Cmd/Ctrl + \` to toggle sidebar, `Escape` to close modals).
+5. **Reading Goals:** A tiny visual tracker in the sidebar (e.g., "X words read today" or "Y pages read").
+6. **Copy-to-Clipboard with Citation:** When copying a highlight, automatically append the citation (e.g., *Organon, Categories, Part 1*).
+
+**Implementation Steps for the AI:**
+1. Provide the complete `package.json` with all necessary dependencies.
+2. Provide the Rust backend structure (`main.rs`, `lib.rs`, `commands.rs`, `db.rs`).
+3. Provide the complete React frontend code, separated into logical components (Sidebar, Reader, SearchModal, NotesPanel, SelectionPopover, etc.).
+4. Provide the CSS/Tailwind v4 configuration, including the custom typography classes and color variables.
+5. Include a sample mock of `data/organon.json` to show the expected schema (book -> parts -> chapters -> paragraphs, with unique IDs). ()
