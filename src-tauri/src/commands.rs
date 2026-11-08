@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 const EMBEDDED_ORGANON: &str = include_str!("../../data/organon_english.json");
-const EMBEDDED_SCHEMA: &str = include_str!("../../data/organon_english.json");
+const EMBEDDED_SCHEMA: &str = EMBEDDED_ORGANON;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SearchResult {

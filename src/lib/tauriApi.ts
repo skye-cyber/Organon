@@ -28,6 +28,17 @@ async function invokeTauri<T>(cmd: string, args?: Record<string, unknown>): Prom
 
 // 1. Fetch Organon Book Data
 export async function fetchOrganonData(): Promise<OrganonData> {
+  // Try streaming local web asset directly (fastest on both Android WebView & Browser)
+  try {
+    const res = await fetch('/data/organon_english.json');
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('[TauriApi] HTTP fetch failed, trying Tauri invoke...', err);
+  }
+
+  // Fallback to Tauri invoke command if asset fetch fails
   if (isTauri()) {
     try {
       const data = await invokeTauri<OrganonData>('get_organon_data');
@@ -35,16 +46,6 @@ export async function fetchOrganonData(): Promise<OrganonData> {
     } catch (e) {
       console.warn('Failed to load via Tauri invoke, attempting fallback...', e);
     }
-  }
-
-  // Fallback for browser mode / Vite dev server
-  try {
-    const res = await fetch('/data/organon_english.json');
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.warn('Error fetching /data/organon_english.json:', err);
   }
 
   throw new Error('Could not load organon_english.json from Tauri or HTTP fetch');

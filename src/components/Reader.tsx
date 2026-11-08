@@ -8,13 +8,19 @@ import {
   BookOpen,
   Check,
   Eraser,
+  ArrowRight,
+  ChevronLeft,
 } from 'lucide-react';
 
 export const Reader: React.FC = () => {
   const bookData = useReaderStore((state) => state.bookData);
   const typography = useReaderStore((state) => state.typography);
   const isZenMode = useReaderStore((state) => state.isZenMode);
-  const currentParagraphId = useReaderStore((state) => state.currentParagraphId);
+  // Optimization: Only subscribe to currentParagraphId when Zen mode is active so normal scroll does not re-render Reader
+  const currentParagraphId = useReaderStore((state) =>
+    state.isZenMode ? state.currentParagraphId : ''
+  );
+  const currentBookId = useReaderStore((state) => state.currentBookId);
   const highlights = useReaderStore((state) => state.highlights);
   const favorites = useReaderStore((state) => state.favorites);
   const setLocation = useReaderStore((state) => state.setLocation);
@@ -26,6 +32,27 @@ export const Reader: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const visitedParagraphs = useRef<Set<string>>(new Set());
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+
+  // Active book lookup: Only render the current treatise to keep DOM size tiny (~100 nodes instead of 70,000)
+  const books = bookData?.books || [];
+  const activeBookIndex = useMemo(() => {
+    const idx = books.findIndex((b) => b.id === currentBookId);
+    return idx !== -1 ? idx : 0;
+  }, [books, currentBookId]);
+
+  const activeBook = books[activeBookIndex] || null;
+  const prevBook = activeBookIndex > 0 ? books[activeBookIndex - 1] : null;
+  const nextBook = activeBookIndex < books.length - 1 ? books[activeBookIndex + 1] : null;
+
+  const handleNavigateBook = (bookId: string) => {
+    const targetBook = books.find((b) => b.id === bookId);
+    const firstChapterId = targetBook?.parts[0]?.chapters[0]?.id || '';
+    const firstParagraphId = targetBook?.parts[0]?.chapters[0]?.paragraphs[0]?.id || '';
+    setLocation(bookId, firstChapterId, firstParagraphId, 0);
+    if (containerRef.current) {
+      containerRef.current.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  };
 
   // Map highlights by paragraph ID for fast O(1) lookup
   const highlightsByParagraph = useMemo(() => {
@@ -183,7 +210,7 @@ export const Reader: React.FC = () => {
   // Scoped Intersection Observer (root = containerRef.current)
   useEffect(() => {
     const container = containerRef.current;
-    if (!bookData || !container) return;
+    if (!activeBook || !container) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -221,7 +248,7 @@ export const Reader: React.FC = () => {
     paragraphNodes.forEach((node) => observer.observe(node));
 
     return () => observer.disconnect();
-  }, [bookData, setLocation, recordReading]);
+  }, [activeBook, setLocation, recordReading]);
 
   // Render text with non-duplicating contiguous character-mapping algorithm
   // This guarantees every character appears exactly once: NO duplication on re-highlighting!
@@ -271,30 +298,11 @@ export const Reader: React.FC = () => {
               ? 'hl-red'
               : 'hl-green';
 
-          const hlItem = currentHl;
           segments.push(
             <mark
-              key={`hl-${hlItem.id}-${runStart}`}
-              className={`${highlightClass} transition-colors cursor-pointer`}
-              title={`Highlight (${hlItem.color}) — Click to manage / unhighlight`}
-              onClick={(e) => {
-                e.stopPropagation();
-                const rect = e.currentTarget.getBoundingClientRect();
-                setSelection({
-                  text: slice,
-                  paragraphId: hlItem.paragraph_id,
-                  bookId: hlItem.book_id || '',
-                  chapterTitle: hlItem.chapter_title || '',
-                  startOffset: hlItem.start_offset,
-                  endOffset: hlItem.end_offset,
-                  rect: {
-                    top: rect.top,
-                    left: rect.left,
-                    width: rect.width,
-                    height: rect.height,
-                  },
-                });
-              }}
+              key={`${currentHl.id}-${runStart}`}
+              data-highlight-id={currentHl.id}
+              className={`${highlightClass} cursor-pointer rounded-xs`}
             >
               {slice}
             </mark>
@@ -334,13 +342,13 @@ export const Reader: React.FC = () => {
       : 'max-w-[65ch]';
 
   const fontFamilyClass =
-    typography.fontFamily === 'serif'
-      ? 'font-organon-serif'
-      : typography.fontFamily === 'sans'
+    typography.fontFamily === 'sans'
       ? 'font-organon-sans'
-      : 'font-organon-mono';
+      : typography.fontFamily === 'mono'
+      ? 'font-organon-mono'
+      : 'font-organon-serif';
 
-  if (!bookData) {
+  if (!bookData || !activeBook) {
     return (
       <div className="flex-1 h-full flex items-center justify-center p-12 text-[var(--text-muted)] text-sm">
         <div className="flex flex-col items-center gap-3">
@@ -358,190 +366,211 @@ export const Reader: React.FC = () => {
       onTouchEnd={() => setTimeout(updateSelectionFromDOM, 80)}
       className="flex-1 h-full min-h-0 overflow-y-auto px-4 sm:px-8 md:px-12 py-8 transition-colors flex justify-center overscroll-contain"
     >
-      <div className={`w-full ${maxWidthClass} transition-all duration-200 space-y-16 pb-36`}>
-        {/* Book Series Title Header */}
-        <div className="text-center pt-4 pb-8 border-b border-[var(--border-subtle)] space-y-2 select-none">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-[var(--accent-gold)] font-bold">
-            The Corpus Aristotelicum
+      <div className={`w-full ${maxWidthClass} transition-all duration-200 space-y-12 pb-36`}>
+        {/* Top Navigation between Books */}
+        <div className="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)] text-xs text-[var(--text-muted)] select-none">
+          {prevBook ? (
+            <button
+              onClick={() => handleNavigateBook(prevBook.id)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-all font-title-classical"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Previous: {prevBook.title}</span>
+            </button>
+          ) : (
+            <span className="font-mono text-[10px] text-[var(--accent-gold)] tracking-wider uppercase">
+              First Treatise
+            </span>
+          )}
+
+          <span className="font-mono text-[10px] text-[var(--accent-gold)] font-medium">
+            Book {activeBookIndex + 1} of {books.length}
           </span>
-          <h1 className="font-title-classical text-3xl sm:text-4xl font-bold tracking-tight text-[var(--text-primary)]">
-            {bookData.title}
-          </h1>
-          <p className="font-serif text-xs text-[var(--text-muted)] italic max-w-md mx-auto">
-            {bookData.description || 'The Complete Logical Treatises of Aristotle'}
-          </p>
         </div>
 
-        {/* Continuous Book / Treatise Stream */}
-        {bookData.books.map((book) => (
-          <section key={book.id} id={`book-${book.id}`} className="space-y-12">
-            {/* Treatise Big Title Card */}
-            <div className="py-6 border-b-2 border-[var(--border-subtle)] space-y-1.5 select-none">
-              <div className="flex items-center gap-2 text-xs text-[var(--accent-gold)] font-semibold tracking-wider uppercase font-title-classical">
-                <BookOpen className="w-4 h-4" />
-                <span>Treatise {book.order}</span>
-              </div>
-              <h2 className="font-title-classical text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                {book.title}
-              </h2>
-              {book.greek_title && (
-                <div className="text-sm font-serif italic text-[var(--text-secondary)]">
-                  {book.greek_title}
-                </div>
-              )}
-              {book.description && (
-                <p className="text-xs text-[var(--text-muted)] leading-relaxed pt-1">
-                  {book.description}
-                </p>
-              )}
+        {/* Active Book / Treatise Stream */}
+        <section id={`book-${activeBook.id}`} className="space-y-12">
+          {/* Treatise Big Title Card */}
+          <div className="py-6 border-b-2 border-[var(--border-subtle)] space-y-2 select-none">
+            <div className="flex items-center gap-2 text-xs text-[var(--accent-gold)] font-semibold tracking-wider uppercase font-title-classical">
+              <BookOpen className="w-4 h-4" />
+              <span>Treatise {activeBook.order} of {books.length}</span>
             </div>
+            <h1 className="font-title-classical text-3xl sm:text-4xl font-bold text-[var(--text-primary)] tracking-tight">
+              {activeBook.title}
+            </h1>
+            {activeBook.greek_title && (
+              <div className="text-sm font-serif italic text-[var(--text-secondary)]">
+                {activeBook.greek_title}
+              </div>
+            )}
+            {activeBook.description && (
+              <p className="text-xs text-[var(--text-muted)] leading-relaxed pt-1">
+                {activeBook.description}
+              </p>
+            )}
+          </div>
 
-            {/* Parts Stream */}
-            {book.parts.map((part) => (
-              <div key={part.id} className="space-y-10">
-                <div className="pt-2 select-none">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)] border-b border-[var(--border-subtle)] pb-1.5 font-title-classical">
-                    {part.title}
-                  </h3>
-                </div>
+          {/* Parts Stream */}
+          {activeBook.parts.map((part) => (
+            <div key={part.id} className="space-y-10">
+              <div className="pt-2 select-none">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)] border-b border-[var(--border-subtle)] pb-1.5 font-title-classical">
+                  {part.title}
+                </h2>
+              </div>
 
-                {/* Chapters Stream */}
-                {part.chapters.map((chapter) => (
-                  <article
-                    key={chapter.id}
-                    id={`ch-${chapter.id}`}
-                    className="space-y-6 pt-4"
-                  >
-                    {/* Chapter Title */}
-                    <div className="space-y-1 select-none">
-                      <h4 className="font-title-classical text-lg sm:text-xl font-bold text-[var(--text-primary)] leading-snug">
-                        {chapter.title}
-                      </h4>
-                    </div>
+              {/* Chapters Stream */}
+              {part.chapters.map((chapter) => (
+                <article
+                  key={chapter.id}
+                  id={`ch-${chapter.id}`}
+                  className="space-y-6 pt-4"
+                >
+                  {/* Chapter Title */}
+                  <div className="space-y-1 select-none">
+                    <h3 className="font-title-classical text-lg sm:text-xl font-bold text-[var(--text-primary)] leading-snug">
+                      {chapter.title}
+                    </h3>
+                  </div>
 
-                    {/* Paragraphs Stream */}
-                    <div className="space-y-6">
-                      {chapter.paragraphs.map((par) => {
-                        const isFavorited = favoritesMap.has(par.id);
-                        const isCurrent = currentParagraphId === par.id;
-                        const zenClass = isZenMode
-                          ? isCurrent
-                            ? 'zen-active'
-                            : 'zen-dimmed'
-                          : '';
+                  {/* Paragraphs Stream */}
+                  <div className="space-y-6">
+                    {chapter.paragraphs.map((par) => {
+                      const isFavorited = favoritesMap.has(par.id);
+                      const isCurrent = currentParagraphId === par.id;
+                      const zenClass = isZenMode
+                        ? isCurrent
+                          ? 'zen-active'
+                          : 'zen-dimmed'
+                        : '';
 
-                        return (
-                          <div
-                            key={par.id}
-                            id={`p-${par.id}`}
-                            data-paragraph-id={par.id}
-                            data-chapter-id={chapter.id}
-                            data-book-id={book.id}
-                            data-chapter-title={chapter.title}
-                            data-full-text={par.text}
-                            className={`group relative transition-all duration-300 rounded-xl p-2 -mx-2 hover:bg-[var(--bg-secondary)]/30 ${zenClass}`}
-                          >
-                            {/* Bekker reference & action toolbar on left/hover */}
-                            <div className="flex items-center justify-between pb-1 select-none text-[11px] text-[var(--text-muted)]">
-                              {par.bekker ? (
-                                <span className="font-mono text-[10px] tracking-wider font-medium text-[var(--accent-gold)] px-1.5 py-0.5 rounded bg-[var(--accent-gold)]/10">
-                                  Bekker {par.bekker}
-                                </span>
-                              ) : (
-                                <span className="font-mono text-[10px] text-[var(--text-muted)]">
-                                  §{par.order}
-                                </span>
-                              )}
-
-                                {/* Hover actions: Star/Favorite & Copy Citation & Clear Highlights */}
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                                {highlightsByParagraph.get(par.id)?.length ? (
-                                  <button
-                                    onClick={() => clearParagraphHighlights(par.id)}
-                                    title="Clear all highlights in this paragraph"
-                                    className="p-1 rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                                  >
-                                    <Eraser className="w-3.5 h-3.5" />
-                                  </button>
-                                ) : null}
-
-                                <button
-                                  onClick={() =>
-                                    toggleFavorite(
-                                      par.id,
-                                      'paragraph',
-                                      `${book.title} (${par.bekker || chapter.title})`,
-                                      par.text.slice(0, 100) + '...'
-                                    )
-                                  }
-                                  title={isFavorited ? 'Remove favorite' : 'Star favorite maxim'}
-                                  className={`p-1 rounded hover:bg-[var(--bg-secondary)] transition-colors ${
-                                    isFavorited ? 'text-amber-500' : 'text-[var(--text-muted)] hover:text-amber-500'
-                                  }`}
-                                >
-                                  <Star
-                                    className={`w-3.5 h-3.5 ${isFavorited ? 'fill-amber-400' : ''}`}
-                                  />
-                                </button>
-
-                                <button
-                                  onClick={() =>
-                                    handleCopyParagraph(
-                                      par.text,
-                                      par.id,
-                                      book.title,
-                                      chapter.title,
-                                      par.bekker
-                                    )
-                                  }
-                                  title="Copy text with citation"
-                                  className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
-                                >
-                                  {copiedId === par.id ? (
-                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                                  ) : (
-                                    <Copy className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Summary callout badge if available */}
-                            {par.summary && (
-                              <div className="mb-2 text-[11px] font-sans font-medium text-[var(--text-secondary)] italic border-l-2 border-[var(--accent-gold)]/40 pl-2.5 py-0.5">
-                                {par.summary}
-                              </div>
+                      return (
+                        <div
+                          key={par.id}
+                          id={`p-${par.id}`}
+                          data-paragraph-id={par.id}
+                          data-chapter-id={chapter.id}
+                          data-book-id={activeBook.id}
+                          data-chapter-title={chapter.title}
+                          data-full-text={par.text}
+                          className={`group relative transition-all duration-300 rounded-xl p-2 -mx-2 hover:bg-[var(--bg-secondary)]/30 ${zenClass}`}
+                        >
+                          {/* Bekker reference & action toolbar on left/hover */}
+                          <div className="flex items-center justify-between pb-1 select-none text-[11px] text-[var(--text-muted)]">
+                            {par.bekker ? (
+                              <span className="font-mono text-[10px] tracking-wider font-medium text-[var(--accent-gold)] px-1.5 py-0.5 rounded bg-[var(--accent-gold)]/10">
+                                Bekker {par.bekker}
+                              </span>
+                            ) : (
+                              <span className="font-mono text-[10px] text-[var(--text-muted)]">
+                                §{par.order}
+                              </span>
                             )}
 
-                            {/* Main Paragraph Text with anchored highlights */}
-                            <p
-                              style={{
-                                fontSize: `${typography.fontSize}px`,
-                                lineHeight: typography.lineHeight,
-                              }}
-                              className={`${fontFamilyClass} text-[var(--text-primary)] text-justify leading-relaxed selection:bg-[var(--selection-bg)]`}
-                            >
-                              {renderHighlightedText(par)}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ))}
-          </section>
-        ))}
+                            {/* Hover actions: Star/Favorite & Copy Citation & Clear Highlights */}
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                              {highlightsByParagraph.get(par.id)?.length ? (
+                                <button
+                                  onClick={() => clearParagraphHighlights(par.id)}
+                                  title="Clear all highlights in this paragraph"
+                                  className="p-1 rounded text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                                >
+                                  <Eraser className="w-3.5 h-3.5" />
+                                </button>
+                              ) : null}
 
-        {/* Reader Finish */}
-        <div className="text-center pt-16 pb-16 sm:pb-8 border-t border-[var(--border-subtle)] space-y-2 select-none text-[var(--text-muted)]">
-          <div className="font-title-classical text-xs tracking-widest uppercase">
-            ΤΕΛΟΣ — Finis Organi Aristotelis
+                              <button
+                                onClick={() =>
+                                  toggleFavorite(
+                                    par.id,
+                                    'paragraph',
+                                    `${activeBook.title} (${par.bekker || chapter.title})`,
+                                    par.text.slice(0, 100) + '...'
+                                  )
+                                }
+                                title={isFavorited ? 'Remove favorite' : 'Star favorite maxim'}
+                                className={`p-1 rounded hover:bg-[var(--bg-secondary)] transition-colors ${
+                                  isFavorited ? 'text-amber-500' : 'text-[var(--text-muted)] hover:text-amber-500'
+                                }`}
+                              >
+                                <Star
+                                  className={`w-3.5 h-3.5 ${isFavorited ? 'fill-amber-400' : ''}`}
+                                />
+                              </button>
+
+                              <button
+                                onClick={() =>
+                                  handleCopyParagraph(
+                                    par.text,
+                                    par.id,
+                                    activeBook.title,
+                                    chapter.title,
+                                    par.bekker
+                                  )
+                                }
+                                title="Copy text with citation"
+                                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                              >
+                                {copiedId === par.id ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Summary callout badge if available */}
+                          {par.summary && (
+                            <div className="mb-2 text-[11px] font-sans font-medium text-[var(--text-secondary)] italic border-l-2 border-[var(--accent-gold)]/40 pl-2.5 py-0.5">
+                              {par.summary}
+                            </div>
+                          )}
+
+                          {/* Main Paragraph Text with anchored highlights */}
+                          <p
+                            style={{
+                              fontSize: `${typography.fontSize}px`,
+                              lineHeight: typography.lineHeight,
+                            }}
+                            className={`${fontFamilyClass} text-[var(--text-primary)] text-justify leading-relaxed selection:bg-[var(--selection-bg)]`}
+                          >
+                            {renderHighlightedText(par)}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </article>
+              ))}
+            </div>
+          ))}
+        </section>
+
+        {/* Bottom Treatise Navigation & Completion Card */}
+        <div className="text-center pt-12 pb-16 sm:pb-8 border-t border-[var(--border-subtle)] space-y-4 select-none">
+          <div className="font-title-classical text-xs tracking-widest uppercase text-[var(--accent-gold)]">
+            ΤΕΛΟΣ — Finis {activeBook.title}
           </div>
-          <p className="text-[11px] font-serif italic">
-            "We have completed the discussion of dialectical reasoning, the syllogism, demonstration, and fallacies."
+          <p className="text-xs font-serif italic text-[var(--text-muted)] max-w-md mx-auto">
+            Completed Treatise {activeBook.order}: {activeBook.title}.
           </p>
+          {nextBook ? (
+            <div className="pt-2">
+              <button
+                onClick={() => handleNavigateBook(nextBook.id)}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[var(--accent-gold)] text-white text-xs font-semibold hover:bg-[var(--accent-hover)] transition-all shadow-md active:scale-95"
+              >
+                <span>Continue to {nextBook.title}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="font-title-classical text-xs text-[var(--text-muted)]">
+              ΤΕΛΟΣ — Finis Organi Aristotelis
+            </div>
+          )}
         </div>
       </div>
     </main>

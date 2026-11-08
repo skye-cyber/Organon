@@ -27,6 +27,7 @@ interface FuseSearchItem {
 export const SearchModal: React.FC = () => {
   const isSearchOpen = useReaderStore((state) => state.isSearchOpen);
   const setSearchOpen = useReaderStore((state) => state.setSearchOpen);
+  const setLocation = useReaderStore((state) => state.setLocation);
   const bookData = useReaderStore((state) => state.bookData);
 
   const [query, setQuery] = useState('');
@@ -46,12 +47,14 @@ export const SearchModal: React.FC = () => {
     }
   }, [isSearchOpen]);
 
-  // Flatten all paragraphs for search indexing
+  // Flatten paragraphs for search indexing ONLY when search modal is open (saves ~30MB memory and startup CPU)
   const { allSearchItems, paragraphSearchContexts } = useMemo(() => {
     const items: FuseSearchItem[] = [];
     const contexts: ParagraphSearchContext[] = [];
 
-    if (!bookData?.books) return { allSearchItems: items, paragraphSearchContexts: contexts };
+    if (!isSearchOpen || !bookData?.books) {
+      return { allSearchItems: items, paragraphSearchContexts: contexts };
+    }
 
     for (const book of bookData.books) {
       for (const part of book.parts) {
@@ -81,10 +84,12 @@ export const SearchModal: React.FC = () => {
     }
 
     return { allSearchItems: items, paragraphSearchContexts: contexts };
-  }, [bookData]);
+  }, [isSearchOpen, bookData]);
 
-  // Configure Fuse.js for full-text search
+  // Configure Fuse.js for full-text search ONLY when search modal is open
   const fuse = useMemo(() => {
+    if (!isSearchOpen || allSearchItems.length === 0) return null;
+
     return new Fuse(allSearchItems, {
       keys: [
         { name: 'text', weight: 0.6 },
@@ -96,7 +101,7 @@ export const SearchModal: React.FC = () => {
       ignoreLocation: true,
       minMatchCharLength: 2,
     });
-  }, [allSearchItems]);
+  }, [isSearchOpen, allSearchItems]);
 
   // Execute search when query, mode, or filter changes
   useEffect(() => {
@@ -114,6 +119,11 @@ export const SearchModal: React.FC = () => {
       try {
         if (searchMode === 'fulltext') {
           // Fuse.js local full-text search
+          if (!fuse) {
+            setResults([]);
+            setIsSearching(false);
+            return;
+          }
           const fuseResults = fuse.search(q);
           const filtered = fuseResults
             .filter((res) =>
@@ -176,16 +186,17 @@ export const SearchModal: React.FC = () => {
 
   if (!isSearchOpen) return null;
 
-  const handleSelectResult = (paragraphId: string) => {
+  const handleSelectResult = (item: SearchResultItem) => {
+    setLocation(item.bookId, item.chapterId, item.paragraphId, 0);
     setSearchOpen(false);
     setTimeout(() => {
-      const el = document.getElementById(`p-${paragraphId}`);
+      const el = document.getElementById(`p-${item.paragraphId}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.classList.add('zen-active');
         setTimeout(() => el.classList.remove('zen-active'), 1800);
       }
-    }, 150);
+    }, 100);
   };
 
   return (
@@ -276,7 +287,7 @@ export const SearchModal: React.FC = () => {
             results.map((item) => (
               <div
                 key={item.paragraphId}
-                onClick={() => handleSelectResult(item.paragraphId)}
+                onClick={() => handleSelectResult(item)}
                 className="p-3 bg-[var(--bg-surface)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl cursor-pointer transition-colors space-y-1.5 group shadow-2xs"
               >
                 <div className="flex items-center justify-between text-xs">

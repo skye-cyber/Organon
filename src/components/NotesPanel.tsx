@@ -27,18 +27,51 @@ export const NotesPanel: React.FC = () => {
   const notes = useReaderStore((state) => state.notes);
   const favorites = useReaderStore((state) => state.favorites);
   const dailyStats = useReaderStore((state) => state.dailyStats);
+  const bookData = useReaderStore((state) => state.bookData);
+  const currentBookId = useReaderStore((state) => state.currentBookId);
+  const setLocation = useReaderStore((state) => state.setLocation);
   const deleteHighlight = useReaderStore((state) => state.deleteHighlight);
   const deleteNote = useReaderStore((state) => state.deleteNote);
   const toggleFavorite = useReaderStore((state) => state.toggleFavorite);
 
   if (isZenMode || !isNotesOpen) return null;
 
-  const jumpToParagraph = (paragraphId: string) => {
-    const el = document.getElementById(`p-${paragraphId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('zen-active');
-      setTimeout(() => el.classList.remove('zen-active'), 1500);
+  const jumpToParagraph = (paragraphId: string, bookId?: string) => {
+    let targetBookId = bookId;
+    if (!targetBookId && bookData?.books) {
+      for (const b of bookData.books) {
+        let found = false;
+        for (const p of b.parts) {
+          for (const ch of p.chapters) {
+            if (ch.paragraphs.some((par) => par.id === paragraphId)) {
+              targetBookId = b.id;
+              found = true;
+              break;
+            }
+          }
+          if (found) break;
+        }
+        if (found) break;
+      }
+    }
+
+    if (targetBookId && targetBookId !== currentBookId) {
+      setLocation(targetBookId, '', paragraphId, 0);
+      setTimeout(() => {
+        const el = document.getElementById(`p-${paragraphId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('zen-active');
+          setTimeout(() => el.classList.remove('zen-active'), 1500);
+        }
+      }, 80);
+    } else {
+      const el = document.getElementById(`p-${paragraphId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('zen-active');
+        setTimeout(() => el.classList.remove('zen-active'), 1500);
+      }
     }
     // On mobile devices, close Notes panel after jumping to context
     if (window.innerWidth < 768) {
@@ -222,7 +255,7 @@ export const NotesPanel: React.FC = () => {
                         {n.chapter_title || 'Aristotle'}
                       </span>
                       <button
-                        onClick={() => jumpToParagraph(n.paragraph_id)}
+                        onClick={() => jumpToParagraph(n.paragraph_id, n.book_id)}
                         className="flex items-center gap-1 text-[var(--accent-gold)] hover:underline font-medium"
                       >
                         Jump <ExternalLink className="w-2.5 h-2.5" />
@@ -270,7 +303,7 @@ export const NotesPanel: React.FC = () => {
                         {h.chapter_title || 'Treatise'}
                       </span>
                       <button
-                        onClick={() => jumpToParagraph(h.paragraph_id)}
+                        onClick={() => jumpToParagraph(h.paragraph_id, h.book_id)}
                         className="flex items-center gap-1 text-[var(--accent-gold)] hover:underline font-medium"
                       >
                         Context <ExternalLink className="w-2.5 h-2.5" />
@@ -311,7 +344,7 @@ export const NotesPanel: React.FC = () => {
                     {group.items.map((item) => (
                       <div
                         key={item.id}
-                        onClick={() => jumpToParagraph(item.paragraphId)}
+                        onClick={() => jumpToParagraph(item.paragraphId, group.bookId)}
                         className="p-2 rounded-lg bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)] border border-[var(--border-subtle)] cursor-pointer transition-colors space-y-1"
                       >
                         <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)]">

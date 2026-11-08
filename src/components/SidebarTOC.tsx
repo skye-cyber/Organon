@@ -24,6 +24,7 @@ export const SidebarTOC: React.FC = () => {
   const bookData = useReaderStore((state) => state.bookData);
   const currentBookId = useReaderStore((state) => state.currentBookId);
   const currentChapterId = useReaderStore((state) => state.currentChapterId);
+  const setLocation = useReaderStore((state) => state.setLocation);
   const isTocOpen = useReaderStore((state) => state.isTocOpen);
   const setTocOpen = useReaderStore((state) => state.setTocOpen);
   const isZenMode = useReaderStore((state) => state.isZenMode);
@@ -37,10 +38,31 @@ export const SidebarTOC: React.FC = () => {
     }));
   };
 
-  const scrollToChapter = (chapterId: string) => {
-    const el = document.getElementById(`ch-${chapterId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const handleBookHeaderClick = (bookId: string) => {
+    toggleBookExpand(bookId);
+    if (bookId !== currentBookId) {
+      const booksList = bookData?.books || [];
+      const targetBook = booksList.find((b) => b.id === bookId);
+      const firstChapterId = targetBook?.parts[0]?.chapters[0]?.id || '';
+      const firstParagraphId = targetBook?.parts[0]?.chapters[0]?.paragraphs[0]?.id || '';
+      setLocation(bookId, firstChapterId, firstParagraphId, 0);
+    }
+  };
+
+  const scrollToChapter = (bookId: string, chapterId: string) => {
+    if (bookId !== currentBookId) {
+      setLocation(bookId, chapterId, '', 0);
+      setTimeout(() => {
+        const el = document.getElementById(`ch-${chapterId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 70);
+    } else {
+      const el = document.getElementById(`ch-${chapterId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
     // On mobile devices, close TOC drawer after selecting a chapter
     if (window.innerWidth < 768) {
@@ -119,7 +141,7 @@ export const SidebarTOC: React.FC = () => {
               >
                 {/* Book Header Item */}
                 <button
-                  onClick={() => toggleBookExpand(book.id)}
+                  onClick={() => handleBookHeaderClick(book.id)}
                   className={`w-full flex items-center justify-between px-3 py-2 text-left rounded-lg text-xs font-semibold transition-all ${
                     isCurrentBook
                       ? 'text-[var(--accent-gold)] bg-[var(--accent-gold)]/10 font-bold'
@@ -150,12 +172,12 @@ export const SidebarTOC: React.FC = () => {
 
                         <div className="space-y-0.5 pl-1">
                           {part.chapters.map((chapter) => {
-                            const isActiveChapter = currentChapterId === chapter.id;
+                            const isActiveChapter = isCurrentBook && currentChapterId === chapter.id;
 
                             return (
                               <button
                                 key={chapter.id}
-                                onClick={() => scrollToChapter(chapter.id)}
+                                onClick={() => scrollToChapter(book.id, chapter.id)}
                                 className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-all flex items-start gap-1.5 group ${
                                   isActiveChapter
                                     ? 'bg-[var(--accent-gold)]/20 text-[var(--accent-gold)] font-semibold shadow-xs'
