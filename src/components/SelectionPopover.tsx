@@ -11,15 +11,52 @@ import {
     X,
     Eraser,
     Trash2,
+    ArrowDownToLine,
+    ArrowUpFromLine,
 } from 'lucide-react';
+
+interface PopoverPosition {
+    isBottom: boolean;
+    top: number;
+    left: number;
+    bottom: number;
+}
 
 export const SelectionPopover: React.FC = () => {
     const popoverRef = useRef<HTMLDivElement>(null);
     const [isNoteInputOpen, setIsNoteInputOpen] = useState(false);
     const [noteText, setNoteText] = useState('');
     const [copied, setCopied] = useState(false);
-    const [position, setPosition] = useState<{ top: number; left: number }>({ top: -9999, left: -9999 });
 
+    // Detect Android or mobile environment
+    const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+
+    // Allow toggling between docking at bottom and floating near selection.
+    // Defaults to TRUE on Android and mobile screens to avoid being obscured by native popovers!
+    const [isDockedAtBottom, setIsDockedAtBottom] = useState<boolean>(() => {
+        const saved = typeof window !== 'undefined' ? localStorage.getItem('organon_popover_docked') : null;
+        if (saved !== null) return saved === 'true';
+        return isAndroid || (typeof window !== 'undefined' && window.innerWidth < 768);
+    });
+
+    const toggleDockMode = () => {
+        const next = !isDockedAtBottom;
+        setIsDockedAtBottom(next);
+        try {
+            localStorage.setItem('organon_popover_docked', String(next));
+        } catch {
+            // Ignore storage errors
+        }
+    };
+
+    const [position, setPosition] = useState<PopoverPosition>({
+        isBottom: false,
+        top: -9999,
+        left: -9999,
+        bottom: -9999,
+    });
+
+    const isZenMode = useReaderStore((state) => state.isZenMode);
     const selection = useReaderStore((state) => state.selection);
     const setSelection = useReaderStore((state) => state.setSelection);
     const highlights = useReaderStore((state) => state.highlights);
@@ -34,42 +71,81 @@ export const SelectionPopover: React.FC = () => {
         if (!selection) return;
 
         const el = popoverRef.current;
-        const popoverWidth = el ? el.offsetWidth : (isNoteInputOpen ? 280 : 340);
+        const popoverWidth = el ? el.offsetWidth : (isNoteInputOpen ? 288 : 340);
         const popoverHeight = el ? el.offsetHeight : (isNoteInputOpen ? 180 : 44);
 
         const vw = window.innerWidth;
         const vh = window.innerHeight;
 
-        // Insets to avoid top navigation bar (56px) and bottom mobile navigation bar (56px)
-        const topSafeInset = 62;
-        const bottomSafeInset = 70;
+        // When docked at bottom (optimal for Android and mobile thumbs):
+        if (isDockedAtBottom) {
+            // In Zen mode: ZenMode pill is at bottom-6 (24px, height ~36px), so 70px gives clean clearance.
+            // When not in Zen mode:
+            //   On mobile (vw < 768): bottom nav bar is 56px (h-14), so 68px sits cleanly above it.
+            //   On desktop/tablet (vw >= 768): 24px gives a clean floating bottom dock.
+            let bottomOffset = 68;
+            if (isZenMode) {
+                bottomOffset = 70;
+            } else if (vw >= 768) {
+                bottomOffset = 24;
+            }
 
-        // Try placing above selection first
-        let top = selection.rect.top - popoverHeight - 8;
-
-        // If not enough room above (near top header), place below selection
-        if (top < topSafeInset) {
-            top = selection.rect.top + selection.rect.height + 8;
+            setPosition({
+                isBottom: true,
+                top: 0,
+                left: 0,
+                bottom: bottomOffset,
+            });
+            return;
         }
 
-        // Clamp vertically within safe bounds
-        const maxTop = Math.max(topSafeInset, vh - popoverHeight - bottomSafeInset);
-        top = Math.max(topSafeInset, Math.min(top, maxTop));
+        // Floating positioning relative to text selection
+        // Safe insets to avoid top header (56px + 8px padding) and bottom bars
+        const topSafeInset = 64;
+        const bottomSafeInset = isZenMode || vw >= 768 ? 24 : 72;
 
-        // Horizontal positioning: center on selection
+        // On Android / mobile, the device's native selection action bar floats ~48px above the text.
+        // We offset upwards with generous clearance to prevent native popovers from obscuring ours!
+        const upwardClearance = isAndroid || vw < 768 ? 52 : 12;
+        let top = selection.rect.top - popoverHeight - upwardClearance;
+
+        // Strictly avoid rendering offscreen at the top!
+        // If placing above would render offscreen or overlap the top header (< topSafeInset):
+        if (top < topSafeInset) {
+            // Flip below the selection, leaving room for touch selection handles
+            const downwardClearance = isAndroid || vw < 768 ? 28 : 12;
+            top = selection.rect.top + selection.rect.height + downwardClearance;
+
+            // If placing below also pushes it past bottom safe bounds, clamp strictly within viewport
+            if (top + popoverHeight > vh - bottomSafeInset) {
+                top = Math.max(topSafeInset, vh - popoverHeight - bottomSafeInset);
+            }
+        }
+
+        // Ensure top is never clipped offscreen at the top
+        top = Math.max(topSafeInset, top);
+
+        // Horizontal positioning: center on selection and clamp within screen borders
         let left = selection.rect.left + selection.rect.width / 2 - popoverWidth / 2;
-        // Clamp horizontally so it never exceeds screen borders
         const maxLeft = Math.max(8, vw - popoverWidth - 8);
         left = Math.max(8, Math.min(left, maxLeft));
 
-        setPosition({ top, left });
-    }, [selection, isNoteInputOpen]);
+        setPosition({
+            isBottom: false,
+            top,
+            left,
+            bottom: 0,
+        });
+    }, [selection, isNoteInputOpen, isDockedAtBottom, isZenMode, isAndroid]);
 
     // Track scroll events so popover follows selection or dismisses if scrolled out of view
     useEffect(() => {
         if (!selection) return;
 
         const handleScroll = () => {
+            // Never dismiss while the user is actively composing a note
+            if (isNoteInputOpen) return;
+
             const sel = window.getSelection();
             if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
                 setSelection(null);
@@ -80,7 +156,7 @@ export const SelectionPopover: React.FC = () => {
                 const range = sel.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
                 if (rect.width > 0 || rect.height > 0) {
-                    // If selection has scrolled off screen (under header or off bottom), dismiss
+                    // If selection has scrolled completely off screen, dismiss
                     if (rect.bottom < 50 || rect.top > window.innerHeight - 50) {
                         setSelection(null);
                         return;
@@ -105,7 +181,7 @@ export const SelectionPopover: React.FC = () => {
         return () => {
             window.removeEventListener('scroll', handleScroll, { capture: true });
         };
-    }, [selection, setSelection]);
+    }, [selection, setSelection, isNoteInputOpen]);
 
     // Handle outside clicks/taps to dismiss popover cleanly
     useEffect(() => {
@@ -190,11 +266,20 @@ export const SelectionPopover: React.FC = () => {
     return (
         <div
             ref={popoverRef}
-            style={{
-                top: `${position.top}px`,
-                left: `${position.left}px`,
-                visibility: position.top === -9999 ? 'hidden' : 'visible',
-            }}
+            style={
+                position.isBottom
+                    ? {
+                          bottom: `${position.bottom}px`,
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          visibility: position.bottom === -9999 ? 'hidden' : 'visible',
+                      }
+                    : {
+                          top: `${position.top}px`,
+                          left: `${position.left}px`,
+                          visibility: position.top === -9999 ? 'hidden' : 'visible',
+                      }
+            }
             onMouseDown={(e) => {
                 // Prevent blurring text selection when tapping toolbar buttons
                 const target = e.target as HTMLElement;
@@ -203,7 +288,11 @@ export const SelectionPopover: React.FC = () => {
                 }
             }}
             onTouchStart={(e) => e.stopPropagation()}
-            className="fixed z-50 bg-[var(--bg-popover)] border border-[var(--border-color)] rounded-xl shadow-xl backdrop-blur-md p-1.5 flex flex-col gap-1.5 max-w-[calc(100vw-16px)] animate-in fade-in zoom-in-95 duration-100 select-none"
+            className={`fixed z-50 bg-[var(--bg-popover)] border border-[var(--border-color)] ${
+                position.isBottom ? 'rounded-2xl shadow-2xl' : 'rounded-xl shadow-xl'
+            } backdrop-blur-md p-1.5 flex flex-col gap-1.5 max-w-[calc(100vw-16px)] animate-in fade-in ${
+                position.isBottom ? 'slide-in-from-bottom-2' : 'zoom-in-95'
+            } duration-150 select-none`}
         >
             {!isNoteInputOpen ? (
                 <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full px-0.5 py-0.5">
@@ -296,11 +385,28 @@ export const SelectionPopover: React.FC = () => {
                         )}
                     </button>
 
+                    {/* Position Mode Toggle: Dock to bottom / Float near text */}
+                    <button
+                        onClick={toggleDockMode}
+                        title={
+                            isDockedAtBottom
+                                ? 'Float toolbar near text selection'
+                                : 'Dock toolbar to bottom of screen'
+                        }
+                        className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-md transition-colors shrink-0 ml-auto"
+                    >
+                        {isDockedAtBottom ? (
+                            <ArrowUpFromLine className="w-3.5 h-3.5" />
+                        ) : (
+                            <ArrowDownToLine className="w-3.5 h-3.5" />
+                        )}
+                    </button>
+
                     {/* Dismiss button */}
                     <button
                         onClick={() => setSelection(null)}
                         title="Dismiss"
-                        className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-md transition-colors shrink-0 ml-auto"
+                        className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-md transition-colors shrink-0"
                     >
                         <X className="w-3.5 h-3.5" />
                     </button>
