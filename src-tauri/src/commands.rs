@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 const EMBEDDED_ORGANON: &str = include_str!("../../data/organon_english.json");
-const EMBEDDED_SCHEMA: &str = include_str!("../../data/organon.json");
+const EMBEDDED_SCHEMA: &str = include_str!("../../data/organon_english.json");
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SearchResult {
@@ -36,9 +36,7 @@ pub fn get_organon_data(file_path: Option<String>) -> Result<serde_json::Value, 
     // 2. Try candidate filesystem paths (for desktop development)
     let candidate_paths = [
         PathBuf::from("data/organon_english.json"),
-        PathBuf::from("data/organon.json"),
         PathBuf::from("../data/organon_english.json"),
-        PathBuf::from("../data/organon.json"),
     ];
 
     for path in &candidate_paths {
@@ -59,8 +57,8 @@ pub fn get_organon_data(file_path: Option<String>) -> Result<serde_json::Value, 
 #[tauri::command]
 pub fn get_sample_schema() -> Result<serde_json::Value, String> {
     let candidate_paths = [
-        PathBuf::from("data/organon.json"),
-        PathBuf::from("../data/organon.json"),
+        PathBuf::from("data/organon_english.json"),
+        PathBuf::from("../data/organon_english.json"),
     ];
 
     for path in &candidate_paths {

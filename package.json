@@ -10,7 +10,8 @@
     "dev:tauri": "tauri dev",
     "build": "tsc && vite build",
     "build:tauri": "tauri build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cert:gen": "keytool -genkey -v -keystore ~/organon-upload-keystore.jks -alias organon -keyalg RSA -keysize 2048 -validity 10000"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

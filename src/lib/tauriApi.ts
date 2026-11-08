@@ -47,9 +47,7 @@ export async function fetchOrganonData(): Promise<OrganonData> {
     console.warn('Error fetching /data/organon_english.json:', err);
   }
 
-  // Secondary fallback to data/organon.json
-  const res2 = await fetch('/data/organon.json');
-  return await res2.json();
+  throw new Error('Could not load organon_english.json from Tauri or HTTP fetch');
 }
 
 // 2. Highlights Persistence

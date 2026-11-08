@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useMemo, useCallback } from 'react';
 import { useReaderStore } from '../store/readerStore';
 import { OrganonParagraph, HighlightItem } from '../types';
+import { copyToClipboard } from '../lib/clipboard';
 import {
   Star,
   Copy,
@@ -46,53 +47,121 @@ export const Reader: React.FC = () => {
     return map;
   }, [favorites]);
 
-  // Text selection handler
-  const handleMouseUp = useCallback(() => {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.toString().trim()) {
-      return;
+  // Text selection handler with robust mobile touch and desktop cursor support
+  const updateSelectionFromDOM = useCallback(() => {
+    try {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+        return;
+      }
+
+      const selectedText = sel.toString().trim();
+      if (selectedText.length < 1) return;
+
+      const range = sel.getRangeAt(0);
+      if (!range) return;
+
+      // Locate paragraph container from range startContainer or commonAncestor
+      let parElement: HTMLElement | null = null;
+      let node: Node | null = range.startContainer;
+      while (node && node !== document.body) {
+        if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).hasAttribute('data-paragraph-id')) {
+          parElement = node as HTMLElement;
+          break;
+        }
+        node = node.parentNode;
+      }
+
+      if (!parElement && range.commonAncestorContainer) {
+        const anc = range.commonAncestorContainer;
+        const ancEl = anc.nodeType === Node.ELEMENT_NODE ? (anc as HTMLElement) : anc.parentElement;
+        parElement = ancEl?.closest('[data-paragraph-id]') as HTMLElement | null;
+      }
+
+      if (!parElement) return;
+
+      const paragraphId = parElement.getAttribute('data-paragraph-id') || '';
+      const bookId = parElement.getAttribute('data-book-id') || '';
+      const chapterTitle = parElement.getAttribute('data-chapter-title') || '';
+      const fullText = parElement.getAttribute('data-full-text') || '';
+
+      // Paragraph text container is the <p> element inside parElement
+      const pElement = parElement.querySelector('p') || parElement;
+
+      // Compute exact character offset within paragraph using DOM Range
+      let startOffset = 0;
+      let endOffset = selectedText.length;
+      try {
+        const preCaretRange = range.cloneRange();
+        preCaretRange.selectNodeContents(pElement);
+        preCaretRange.setEnd(range.startContainer, range.startOffset);
+        startOffset = preCaretRange.toString().length;
+        endOffset = startOffset + selectedText.length;
+      } catch {
+        const idx = fullText.indexOf(selectedText);
+        startOffset = idx !== -1 ? idx : 0;
+        endOffset = startOffset + selectedText.length;
+      }
+
+      // Calculate bounding rect with client rects fallback
+      let rect = range.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) {
+        const clientRects = range.getClientRects();
+        if (clientRects.length > 0) {
+          rect = clientRects[0];
+        }
+      }
+
+      const pRect = pElement.getBoundingClientRect();
+      const validRect =
+        rect.width > 0 || rect.height > 0
+          ? {
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height,
+            }
+          : {
+              top: pRect.top + 8,
+              left: pRect.left + 8,
+              width: Math.min(200, pRect.width),
+              height: 24,
+            };
+
+      setSelection({
+        text: selectedText,
+        paragraphId,
+        bookId,
+        chapterTitle,
+        startOffset,
+        endOffset,
+        rect: validRect,
+      });
+    } catch (e) {
+      console.warn('[Reader] Suppressed selection update error:', e);
     }
-
-    const selectedText = sel.toString().trim();
-    if (selectedText.length < 2) return;
-
-    const range = sel.getRangeAt(0);
-    const container = range.commonAncestorContainer;
-    const parElement = (
-      container.nodeType === Node.ELEMENT_NODE
-        ? (container as HTMLElement)
-        : (container.parentElement as HTMLElement)
-    )?.closest('[data-paragraph-id]') as HTMLElement | null;
-
-    if (!parElement) return;
-
-    const paragraphId = parElement.getAttribute('data-paragraph-id') || '';
-    const bookId = parElement.getAttribute('data-book-id') || '';
-    const chapterTitle = parElement.getAttribute('data-chapter-title') || '';
-    const fullText = parElement.getAttribute('data-full-text') || '';
-
-    // Calculate exact character offset in the paragraph
-    const startIdx = fullText.indexOf(selectedText);
-    const startOffset = startIdx !== -1 ? startIdx : 0;
-    const endOffset = startOffset + selectedText.length;
-
-    const rect = range.getBoundingClientRect();
-
-    setSelection({
-      text: selectedText,
-      paragraphId,
-      bookId,
-      chapterTitle,
-      startOffset,
-      endOffset,
-      rect: {
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
-      },
-    });
   }, [setSelection]);
+
+  // Listen to document selectionchange for mobile text selection handles
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const handleSelectionChange = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+          return;
+        }
+        updateSelectionFromDOM();
+      }, 160);
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      if (timer) clearTimeout(timer);
+    };
+  }, [updateSelectionFromDOM]);
 
   // Delegate scroll handling directly to content container for smooth progress calculation
   const handleScroll = useCallback(() => {
@@ -241,7 +310,7 @@ export const Reader: React.FC = () => {
     return segments;
   };
 
-  const handleCopyParagraph = (
+  const handleCopyParagraph = async (
     text: string,
     parId: string,
     bookTitle: string,
@@ -249,9 +318,11 @@ export const Reader: React.FC = () => {
     bekker?: string
   ) => {
     const citation = `"${text}"\n— Aristotle, ${bookTitle} (${chTitle})${bekker ? ` [${bekker}]` : ''}`;
-    navigator.clipboard.writeText(citation);
-    setCopiedId(parId);
-    setTimeout(() => setCopiedId(null), 1500);
+    const success = await copyToClipboard(citation);
+    if (success) {
+      setCopiedId(parId);
+      setTimeout(() => setCopiedId(null), 1500);
+    }
   };
 
   // Resolve typography styles
@@ -283,7 +354,8 @@ export const Reader: React.FC = () => {
   return (
     <main
       ref={containerRef}
-      onMouseUp={handleMouseUp}
+      onMouseUp={updateSelectionFromDOM}
+      onTouchEnd={() => setTimeout(updateSelectionFromDOM, 80)}
       className="flex-1 h-full min-h-0 overflow-y-auto px-4 sm:px-8 md:px-12 py-8 transition-colors flex justify-center overscroll-contain"
     >
       <div className={`w-full ${maxWidthClass} transition-all duration-200 space-y-16 pb-36`}>
@@ -462,8 +534,8 @@ export const Reader: React.FC = () => {
           </section>
         ))}
 
-        {/* Reader Finis */}
-        <div className="text-center pt-16 pb-8 border-t border-[var(--border-subtle)] space-y-2 select-none text-[var(--text-muted)]">
+        {/* Reader Finish */}
+        <div className="text-center pt-16 pb-16 sm:pb-8 border-t border-[var(--border-subtle)] space-y-2 select-none text-[var(--text-muted)]">
           <div className="font-title-classical text-xs tracking-widest uppercase">
             ΤΕΛΟΣ — Finis Organi Aristotelis
           </div>

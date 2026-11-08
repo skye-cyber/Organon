@@ -105,10 +105,10 @@ export const NotesPanel: React.FC = () => {
       {/* Mobile Backdrop Overlay */}
       <div
         onClick={() => setNotesOpen(false)}
-        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs hidden animate-in fade-in duration-150"
+        className="absolute inset-0 z-40 bg-black/50 backdrop-blur-xs hidden animate-in fade-in duration-150"
       />
 
-      <aside className="fixed md:static inset-y-0 right-0 z-50 md:z-20 w-80 sm:w-92 h-full flex-shrink-0 bg-[var(--bg-popover)] md:bg-[var(--bg-secondary)]/50 border-l border-[var(--border-subtle)] flex flex-col transition-all select-none shadow-2xl md:shadow-none animate-in slide-in-from-right-4 duration-150">
+      <aside className="absolute md:static inset-y-0 right-0 z-50 md:z-20 w-80 sm:w-92 h-full flex-shrink-0 bg-[var(--bg-popover)] md:bg-[var(--bg-secondary)]/50 border-l border-[var(--border-subtle)] flex flex-col transition-all select-none shadow-2xl md:shadow-none animate-in slide-in-from-right-4 duration-150">
         {/* Panel Top Header */}
         <div className="p-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between safe-area-top">
           <div className="flex items-center gap-2">

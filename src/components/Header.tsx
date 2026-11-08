@@ -4,7 +4,7 @@ import {
   Menu,
   Search,
   Type,
-  Maximize,
+//   Maximize,
   BookOpen,
   Bookmark,
   HelpCircle,
@@ -44,7 +44,7 @@ export const Header: React.FC = () => {
   }
 
   return (
-    <header className="sticky top-0 z-40 h-14 bg-[var(--bg-primary)]/90 backdrop-blur-md border-b border-[var(--border-subtle)] px-4 flex items-center justify-between transition-colors">
+    <header className="absolute top-0 w-full z-40 h-14 bg-[var(--bg-primary)]/90 backdrop-blur-md border-b border-[var(--border-subtle)] px-4 flex items-center justify-between transition-colors ">
       {/* Left Navigation controls */}
       <div className="flex items-center gap-3">
         <button
@@ -73,9 +73,9 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Center Breadcrumb */}
-      <div className="flex-1 max-w-md mx-4 text-center truncate">
+      <div className="flex-1 max-w-md mx-4 text-center truncate w-fit max-w-[50%] sm:max-w-fit truncate">
         {currentChapterTitle ? (
-          <span className="text-xs md:text-sm text-[var(--text-secondary)] font-medium truncate inline-block max-w-full">
+          <span className="text-xs md:text-sm text-[var(--text-secondary)] font-medium truncate inline-block w-fit max-w-32 sm:max-w-fit truncate">
             {currentChapterTitle}
           </span>
         ) : (
@@ -86,7 +86,7 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-1 sm:gap-1.5">
+      <div className="flex items-center gap-0.5 sm:gap-1.5">
         <button
           onClick={() => toggleSearch()}
           title="Search Full-Text & Semantics (Ctrl+F)"

@@ -48,4 +48,3 @@
 2. Provide the Rust backend structure (`main.rs`, `lib.rs`, `commands.rs`, `db.rs`).
 3. Provide the complete React frontend code, separated into logical components (Sidebar, Reader, SearchModal, NotesPanel, SelectionPopover, etc.).
 4. Provide the CSS/Tailwind v4 configuration, including the custom typography classes and color variables.
-5. Include a sample mock of `data/organon.json` to show the expected schema (book -> parts -> chapters -> paragraphs, with unique IDs). ()

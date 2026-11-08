@@ -218,7 +218,7 @@ export const App: React.FC = () => {
   ]);
 
   return (
-    <div className="relative h-screen h-[100dvh] overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col font-sans transition-colors selection:bg-[var(--selection-bg)]">
+    <div className="relative h-full overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col font-sans transition-colors selection:bg-[var(--selection-bg)]">
       {/* Top Subtle Reading Progress Bar */}
       <ReadingProgress />
 
@@ -226,7 +226,7 @@ export const App: React.FC = () => {
       <Header />
 
       {/* Main Reading Workspace with Sticky Left/Right Sidebars and Dedicated Content Scroll */}
-      <div className="flex-1 min-h-0 flex overflow-hidden relative">
+      <div className="relative flex-1 min-h-0 flex overflow-hidden relative">
         {/* Left: Collapsible Table of Contents (Fixed / Sticky) */}
         <SidebarTOC />
 
@@ -239,7 +239,7 @@ export const App: React.FC = () => {
 
       {/* Mobile Ergonomic Bottom Navigation Bar */}
       {!isZenMode && (
-        <nav className="md:hidden h-14 flex-shrink-0 bg-[var(--bg-primary)] border-t border-[var(--border-subtle)] flex items-center justify-around px-2 z-30 safe-area-bottom shadow-lg select-none">
+        <nav className="absolute bottom-0 w-full md:hidden h-14 flex-shrink-0 bg-[var(--bg-primary)] border-t border-[var(--border-subtle)] flex items-center justify-around px-2 z-40 shadow-lg select-none">
           <button
             onClick={toggleToc}
             className={`flex flex-col items-center justify-center gap-0.5 p-1 rounded-lg text-[10px] transition-colors ${

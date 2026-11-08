@@ -3,9 +3,10 @@ import os
 import re
 import numpy as np
 
+
 def build_dataset():
     print("Building comprehensive Aristotle's Organon dataset...")
-    
+
     books = [
         {
             "id": "categories",
@@ -558,23 +559,25 @@ def build_dataset():
             for c in p["chapters"]:
                 for par in c["paragraphs"]:
                     paragraphs.append(par)
-    
+
     print(f"Total paragraphs to embed: {len(paragraphs)}")
 
     # Create semantic vectors
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.decomposition import TruncatedSVD
 
-    corpus = [f"{p['bekker']} {p.get('summary', '')} {p['text']}" for p in paragraphs]
-    
+    corpus = [f"{p['bekker']} {p.get('summary', '')} {
+        p['text']}" for p in paragraphs]
+
     # 64-dimensional dense semantic vectors
     n_dim = min(64, len(corpus) - 1)
-    tfidf = TfidfVectorizer(max_features=500, stop_words='english', ngram_range=(1, 2))
+    tfidf = TfidfVectorizer(
+        max_features=500, stop_words='english', ngram_range=(1, 2))
     X = tfidf.fit_transform(corpus)
-    
+
     svd = TruncatedSVD(n_components=n_dim, random_state=42)
     embeddings_matrix = svd.fit_transform(X)
-    
+
     # Normalize vectors to unit length for cosine similarity
     norms = np.linalg.norm(embeddings_matrix, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
@@ -594,9 +597,9 @@ def build_dataset():
         }
 
     # Write out data/organon.json (the canonical sample mock showing the expected schema)
-    with open("data/organon.json", "w", encoding="utf-8") as f:
-        json.dump(dataset, f, indent=2, ensure_ascii=False)
-    print("Successfully written data/organon.json")
+    # with open("data/organon.json", "w", encoding="utf-8") as f:
+    #     json.dump(dataset, f, indent=2, ensure_ascii=False)
+    # print("Successfully written data/organon.json")
 
     # Also write out data/organon_english.json with the exact same rich structure
     with open("data/organon_english.json", "w", encoding="utf-8") as f:
@@ -606,7 +609,9 @@ def build_dataset():
     # Write out data/embeddings.json for pre-computed fast semantic search
     with open("data/embeddings.json", "w", encoding="utf-8") as f:
         json.dump(embeddings_dict, f, indent=2, ensure_ascii=False)
-    print(f"Successfully written data/embeddings.json ({len(embeddings_dict)} vectors)")
+    print(
+        f"Successfully written data/embeddings.json ({len(embeddings_dict)} vectors)")
+
 
 if __name__ == "__main__":
     build_dataset()

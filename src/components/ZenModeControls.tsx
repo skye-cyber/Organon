@@ -31,7 +31,7 @@ export const ZenModeControls: React.FC = () => {
   if (!isZenMode) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
       <div className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-[var(--bg-popover)]/90 backdrop-blur-md border border-[var(--border-color)] shadow-[var(--shadow-soft)] text-xs text-[var(--text-secondary)]">
         <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
         <span className="font-medium text-[var(--text-primary)]">Focus Mode</span>

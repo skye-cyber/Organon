@@ -25,7 +25,7 @@ export const DictionaryModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+    <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
       <div className="w-full max-w-lg bg-[var(--bg-popover)] border border-[var(--border-color)] rounded-2xl shadow-[var(--shadow-soft)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between">

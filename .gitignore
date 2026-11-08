@@ -47,3 +47,4 @@ Thumbs.db
 *.sublime-workspace
 *.swp
 *.swo
+public/data/
